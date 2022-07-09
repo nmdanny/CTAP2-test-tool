@@ -420,6 +420,8 @@ void HidDevice::Log(std::string_view direction, Frame* frame) const {
 
 std::string HidDevice::FindDevicePath() {
   hid_device_info* devs = nullptr;
+  int num_devices = 0;
+  int num_devices_zero_usage_page = 0;
   for (int i = 0; i < kHidDeviceRetries && !devs; i++) {
     // Linear increase of waiting time by using the iteration index as a
     // multiplier. This has the nice advantage of not waiting on the first
@@ -427,10 +429,30 @@ std::string HidDevice::FindDevicePath() {
     absl::SleepFor(absl::Milliseconds(100) * i);
     devs = hid_enumerate(device_identifiers_.vendor_id,
                          device_identifiers_.product_id);
+
+    for (hid_device_info* cur_dev = devs; cur_dev; cur_dev = cur_dev->next) {
+      ++num_devices;
+      if (cur_dev->usage_page == 0) {
+        num_devices_zero_usage_page++;
+      }
+    }
   }
   hid_device_info* root = devs;
-  while (devs && devs->usage_page != 0xf1d0) {
-    devs = devs->next;
+  if (num_devices > 1 && num_devices_zero_usage_page > 0) {
+    std::cout << "Warning: found " << num_devices_zero_usage_page << "/" << num_devices << " devices with zero usage page, "
+              << "might not be able to detect FIDO device" << std::endl;
+  }
+
+  // On some systems, all devices will appear to have a usage page 0 - 
+  // In that case, if we only found 1 device matching the given vendor & product IDs,
+  // assume that is the FIDO device.
+ if (num_devices == 1 && num_devices_zero_usage_page == 1) {
+    std::cout << "Warning: found only 1 candidate for FIDO device with zero usage page. Assuming it is the FIDO device" << std::endl;
+  }
+  else {
+    while (num_devices > 1 && devs && devs->usage_page != 0xf1d0) {
+      devs = devs->next;
+    }
   }
   CHECK(devs) << "The key with the expected vendor & product ID was not found.";
   std::string pathname = devs->path;
