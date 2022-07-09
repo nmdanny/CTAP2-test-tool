@@ -48,6 +48,9 @@ struct DeviceIdentifiers {
   std::string serial_number;
   uint16_t vendor_id;
   uint16_t product_id;
+  std::string path;
+
+  std::string ToString();
 };
 
 }  // namespace fido2_tests

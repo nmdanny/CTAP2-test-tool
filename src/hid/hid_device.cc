@@ -67,27 +67,39 @@ void PromptUser() {
 // path, for example "/dev/hidraw4".
 DeviceIdentifiers ReadDeviceIdentifiers(std::string_view pathname) {
   hid_device_info* devs = hid_enumerate(0, 0);  // 0 means all devices
+  std::vector<DeviceIdentifiers> foundIdentifiers;
+  std::optional<DeviceIdentifiers> requestedIdentifiers;
   for (hid_device_info* cur_dev = devs; cur_dev; cur_dev = cur_dev->next) {
+    std::wstring manufacturer = cur_dev->manufacturer_string;
+    std::wstring product_name = cur_dev->product_string;
+    std::wstring serial_number = cur_dev->serial_number;
+    DeviceIdentifiers identifiers = {
+        .manufacturer = std::string(manufacturer.begin(), manufacturer.end()),
+        .product_name = std::string(product_name.begin(), product_name.end()),
+        .serial_number =
+            std::string(serial_number.begin(), serial_number.end()),
+        .vendor_id = cur_dev->vendor_id,
+        .product_id = cur_dev->product_id,
+        .path = cur_dev->path};
+    foundIdentifiers.push_back(identifiers);
     if (cur_dev->path == pathname) {
-      std::wstring manufacturer = cur_dev->manufacturer_string;
-      std::wstring product_name = cur_dev->product_string;
-      std::wstring serial_number = cur_dev->serial_number;
-      DeviceIdentifiers identifiers = {
-          .manufacturer = std::string(manufacturer.begin(), manufacturer.end()),
-          .product_name = std::string(product_name.begin(), product_name.end()),
-          .serial_number =
-              std::string(serial_number.begin(), serial_number.end()),
-          .vendor_id = cur_dev->vendor_id,
-          .product_id = cur_dev->product_id};
-      hid_free_enumeration(devs);
-      CHECK(identifiers.vendor_id != 0 && identifiers.product_id != 0)
-          << "The device needs a non-zero vendor and product ID.";
-      return identifiers;
+      requestedIdentifiers = identifiers;
     }
   }
 
   hid_free_enumeration(devs);
-  CHECK(false) << "There was no device at path: " << pathname;
+  if (!requestedIdentifiers.has_value()) {
+    std::cout << "There was no device at path: " << pathname << ", here are the detected devices: " << std::endl;
+    for (auto& iden: foundIdentifiers) {
+      std::cout << "Found device: " << iden.ToString() << std::endl;
+    }
+    CHECK(false) << "There was no device at path: " << pathname;
+  }
+  auto identifiers = requestedIdentifiers.value();
+  CHECK(identifiers.vendor_id != 0 && identifiers.product_id != 0)
+      << "The device needs a non-zero vendor and product ID.";
+  return identifiers;
+
 }
 
 bool IsKnownStatusByte(uint8_t status_byte) {
