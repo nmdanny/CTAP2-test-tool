@@ -482,8 +482,9 @@ absl::variant<cbor::Value, Status> GetInfoPositiveTest(
     return status;
   }
 
-  absl::optional<cbor::Value> decoded_response = cbor::Reader::Read(resp_cbor);
-  CHECK(decoded_response.has_value()) << "CBOR decoding failed";
+  cbor::Reader::DecoderError err;
+  absl::optional<cbor::Value> decoded_response = cbor::Reader::Read(resp_cbor, &err);
+  CHECK(decoded_response.has_value()) << "CBOR decoding failed: " << cbor::Reader::ErrorCodeToString(err);
   CHECK(decoded_response->is_map()) << "CBOR response is not a map";
   const auto& decoded_map = decoded_response->GetMap();
 
